@@ -1,44 +1,37 @@
 # Serum MIDI Map Generator
 
-Reverse-engineering and generation tools for Xfer Serum 2 `.SerumMIDIMap` files.
+Tools for inspecting and generating Xfer Serum 2 `.SerumMIDIMap` files.
 
-This repository starts from three user-supplied reference files:
+## What works
 
-- a Serum 2 Novation MIDI map
-- Serum 2's default MIDI map
-- a Novation `.mmp` map
+- Parses the `XferJson` container
+- Decompresses and compresses Zstandard payloads
+- Decodes and encodes the Xfer compact binary value format
+- Round-trips the supplied Serum 2 maps
+- Generates an experimental MicroFreak map using the eight target parameter IDs from Serum's default map
 
-The goal is to generate a valid Serum 2 MIDI map from a controller CSV, beginning with the Arturia MicroFreak.
+## MicroFreak mapping
 
-## Current confirmed format
+The generated map assigns these MicroFreak CCs to the eight targets from Serum's default map:
 
-A `.SerumMIDIMap` file contains:
+| MicroFreak control | CC |
+|---|---:|
+| Cutoff | 23 |
+| Resonance | 83 |
+| Timbre | 12 |
+| Shape | 13 |
+| Wave | 10 |
+| Filter amount | 26 |
+| Envelope attack | 105 |
+| Envelope decay | 106 |
 
-1. `XferJson\0` magic bytes
-2. an unsigned 64-bit little-endian JSON-header length
-3. a JSON metadata header
-4. an unsigned 32-bit little-endian uncompressed payload length
-5. an unsigned 32-bit little-endian compression type (`2` in the samples)
-6. a Zstandard-compressed MessagePack payload
-
-The decoded payload contains a `midiMap` array. Each entry contains a MIDI CC number and one or more internal Serum parameter IDs.
-
-## Status
-
-- [x] Container parser
-- [x] Zstandard payload extraction
-- [x] MessagePack decoding
-- [x] Round-trip writer scaffold
-- [x] MicroFreak controller CSV
-- [ ] Identify stable Serum parameter names for each internal parameter ID
-- [ ] Confirm header hash algorithm
-- [ ] Validate a generated map inside Serum 2
+Because Xfer's internal parameter IDs are not publicly named in the file, the generator preserves the eight target IDs from the default Serum map rather than guessing IDs.
 
 ## Setup
 
 ```bash
 python -m venv .venv
-.venv\\Scripts\\activate
+.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
@@ -48,24 +41,15 @@ pip install -r requirements.txt
 python -m serum_map inspect "samples/default.SerumMIDIMap"
 ```
 
-## Export decoded JSON
+## Generate the MicroFreak map
 
 ```bash
-python -m serum_map decode "samples/default.SerumMIDIMap" --output decoded.json
-```
-
-## Build from a mapping CSV
-
-```bash
-python -m serum_map build \
+python -m serum_map build-microfreak \
   --controller data/MicroFreak.csv \
-  --assignments data/microfreak_serum_assignments.csv \
-  --template "samples/Novation Serum 2 Map.SerumMIDIMap" \
+  --template samples/default.SerumMIDIMap \
   --output MicroFreak.SerumMIDIMap
 ```
 
-Generation is intentionally blocked unless all target Serum parameter IDs are explicit. The tool does not guess plugin parameters.
+## Validation status
 
-## Important limitation
-
-The container structure and payload encoding are confirmed. The metadata `hash` field has not yet been proven. The writer currently supports preserving the template hash for controlled experiments, or accepting an explicitly supplied hash. A generated file should be treated as experimental until Serum 2 successfully imports it.
+The generated file is structurally valid and can be parsed back losslessly by this project. It still requires a real Serum 2 import test. The header hash is preserved from the template because its algorithm or semantics have not yet been confirmed.
